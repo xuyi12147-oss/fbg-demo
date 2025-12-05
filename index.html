@@ -1,719 +1,922 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <title>FBG 边缘滤波法 动画讲解</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft Yahei", sans-serif;
-    }
-
-    body {
-      background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
-      color: #e5e7eb;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-
-    .app {
-      width: 100%;
-      max-width: 1100px;
-      background: rgba(15, 23, 42, 0.96);
-      border-radius: 18px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-      padding: 24px 26px 20px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .title-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .title {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-    }
-
-    .subtitle {
-      font-size: 12px;
-      color: #9ca3af;
-    }
-
-    .step-indicator {
-      font-size: 12px;
-      color: #9ca3af;
-    }
-
-    .step-indicator span {
-      color: #f97316;
-      font-weight: 600;
-    }
-
-    .main {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 16px;
-      margin-top: 6px;
-    }
-
-    .left, .right {
-      position: relative;
-      min-height: 340px;
-    }
-
-    /* 卡片样式 */
-    .card {
-      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.1), transparent 60%);
-      border-radius: 16px;
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      padding: 16px 18px;
-      height: 100%;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .badge {
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.7);
-      color: #cbd5f5;
-    }
-
-    .card-body {
-      font-size: 13px;
-      color: #d1d5db;
-      line-height: 1.5;
-    }
-
-    /* 动画相关 */
-    .step {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      transform: translateY(12px);
-      pointer-events: none;
-      transition: opacity 0.4s ease, transform 0.4s ease;
-    }
-
-    .step.active {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
-
-    .fade-in-up {
-      opacity: 0;
-      transform: translateY(8px);
-      animation: fadeInUp 0.6s ease forwards;
-    }
-
-    @keyframes fadeInUp {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* 光谱绘图区域 */
-    .spectrum-canvas {
-      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95));
-      border-radius: 14px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-      margin-top: 6px;
-      padding: 10px 14px 12px;
-      position: relative;
-      height: 260px;
-      overflow: hidden;
-    }
-
-    .axis {
-      position: absolute;
-      left: 32px;
-      bottom: 28px;
-      right: 12px;
-      height: 1px;
-      background: linear-gradient(to right, #4b5563, #6b7280);
-    }
-
-    .axis::after {
-      content: "波长 λ";
-      position: absolute;
-      right: 0;
-      top: 4px;
-      font-size: 11px;
-      color: #9ca3af;
-    }
-
-    .peak {
-      position: absolute;
-      bottom: 28px;
-      width: 70px;
-      height: 110px;
-      background: linear-gradient(to top, rgba(96, 165, 250, 0.1), rgba(96, 165, 250, 0.9));
-      clip-path: polygon(50% 0, 100% 100%, 0 100%);
-      box-shadow: 0 0 14px rgba(96, 165, 250, 0.8);
-      transition: transform 0.7s ease;
-    }
-
-    .peak-label {
-      position: absolute;
-      font-size: 11px;
-      color: #93c5fd;
-      bottom: 142px;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-
-    .filter-slope {
-      position: absolute;
-      bottom: 28px;
-      left: 44px;
-      width: calc(100% - 72px);
-      height: 120px;
-      background: linear-gradient(to right, rgba(55, 65, 81, 0.2), rgba(52, 211, 153, 0.9));
-      clip-path: polygon(0 100%, 55% 100%, 100% 0, 0 0);
-      opacity: 0;
-      transition: opacity 0.5s ease;
-    }
-
-    .filter-slope::after {
-      content: "滤波器透射率 T(λ)";
-      position: absolute;
-      top: 6px;
-      right: 12px;
-      font-size: 11px;
-      color: #bbf7d0;
-    }
-
-    .filter-slope.visible {
-      opacity: 1;
-    }
-
-    .intensity-bar {
-      position: absolute;
-      width: 16px;
-      bottom: 28px;
-      right: 24px;
-      height: 10px;
-      border-radius: 999px 999px 2px 2px;
-      background: linear-gradient(to top, rgba(248, 250, 252, 0.1), rgba(250, 204, 21, 0.9));
-      box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
-      transform-origin: bottom;
-      transition: height 0.7s ease;
-    }
-
-    .intensity-label {
-      position: absolute;
-      right: 20px;
-      bottom: 156px;
-      font-size: 11px;
-      color: #fde68a;
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-    }
-
-    .arrow {
-      position: absolute;
-      font-size: 11px;
-      color: #f97316;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .arrow span {
-      opacity: 0.9;
-    }
-
-    .small-note {
-      font-size: 11px;
-      color: #9ca3af;
-      margin-top: 6px;
-    }
-
-    /* 右侧公式、说明 */
-    .right-card {
-      background: radial-gradient(circle at bottom, rgba(79, 70, 229, 0.28), transparent 60%);
-    }
-
-    .eq {
-      font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
-      font-size: 12px;
-      background: rgba(15, 23, 42, 0.85);
-      padding: 6px 8px;
-      border-radius: 8px;
-      margin: 4px 0;
-      border: 1px solid rgba(75, 85, 99, 0.9);
-    }
-
-    .list {
-      margin-top: 8px;
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .list li {
-      margin-left: 16px;
-      margin-bottom: 4px;
-    }
-
-    /* 底部控制条 */
-    .footer {
-      margin-top: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: #9ca3af;
-    }
-
-    .buttons {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    button {
-      border: none;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: linear-gradient(to right, #38bdf8, #6366f1);
-      color: white;
-      font-size: 12px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.5);
-      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
-    }
-
-    button.secondary {
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      box-shadow: none;
-    }
-
-    button:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 28px rgba(59, 130, 246, 0.6);
-      filter: brightness(1.03);
-    }
-
-    .progress-dots {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }
-
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      background: rgba(148, 163, 184, 0.3);
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .dot.active {
-      background: #38bdf8;
-      transform: scale(1.4);
-    }
-
-    .tagline {
-      font-size: 11px;
-      color: #6b7280;
-    }
-
-    @media (max-width: 900px) {
-      .main {
-        grid-template-columns: 1fr;
-      }
-      .left, .right {
-        min-height: 260px;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光纤光栅边缘滤波解调模拟系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 25px 0;
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        h1 {
+            font-size: 2.4rem;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: 300;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .comparison-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        
+        @media (max-width: 1200px) {
+            .comparison-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .comparison-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+        
+        .panel-title {
+            font-size: 1.4rem;
+            color: #1a237e;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .control-panel {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-around;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 200px;
+        }
+        
+        .control-title {
+            font-size: 1.1rem;
+            color: #1a237e;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .slider-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .slider-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #283593;
+            margin-bottom: 8px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        .direct-slider {
+            background: linear-gradient(to right, #d32f2f, #f44336);
+        }
+        
+        .demod-slider {
+            background: linear-gradient(to right, #388e3c, #4caf50);
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .direct-slider::-webkit-slider-thumb {
+            background: #d32f2f;
+        }
+        
+        .demod-slider::-webkit-slider-thumb {
+            background: #388e3c;
+        }
+        
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            height: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chart-title {
+            font-size: 1.2rem;
+            color: #1a237e;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .chart-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        
+        .data-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .data-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid;
+        }
+        
+        .direct-data {
+            border-left-color: #d32f2f;
+        }
+        
+        .demod-data {
+            border-left-color: #388e3c;
+        }
+        
+        .data-title {
+            font-size: 1rem;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        .data-value {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        
+        .direct-value {
+            color: #d32f2f;
+        }
+        
+        .demod-value {
+            color: #388e3c;
+        }
+        
+        .btn-reset {
+            display: block;
+            margin: 0 auto 25px;
+            padding: 10px 25px;
+            background: #3949ab;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn-reset:hover {
+            background: #283593;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9rem;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .sensitivity-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .low-sensitivity {
+            background-color: #d32f2f;
+        }
+        
+        .high-sensitivity {
+            background-color: #388e3c;
+        }
+    </style>
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <div class="title-group">
-        <div class="title">FBG 边缘滤波法 · 动画讲解</div>
-        <div class="subtitle">从“波长漂移”到“电压信号”的完整解调过程</div>
-      </div>
-      <div class="step-indicator">
-        步骤 <span id="stepNumber">1</span> / <span id="stepTotal">5</span>
-      </div>
+    <div class="container">
+        <header>
+            <h1>光纤光栅边缘滤波解调模拟系统</h1>
+            <p class="subtitle">交互式模拟光纤布拉格光栅(FBG)在温度与应变变化下的响应及边缘滤波解调过程</p>
+        </header>
+        
+        <div class="comparison-section">
+            <div class="comparison-panel">
+                <div class="panel-title">直接检测（无解调器）</div>
+                
+                <div class="control-panel">
+                    <div class="control-group">
+                        <div class="control-title">温度控制 (°C)</div>
+                        <div class="slider-container">
+                            <div class="slider-value" id="directTempValue">20.0 °C</div>
+                            <input type="range" id="directTempSlider" class="direct-slider" min="-50" max="150" value="20" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-title">应变控制 (με)</div>
+                        <div class="slider-container">
+                            <div class="slider-value" id="directStrainValue">0 με</div>
+                            <input type="range" id="directStrainSlider" class="direct-slider" min="0" max="3000" value="0" step="10">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-reset" id="directResetBtn">重置参数</button>
+                </div>
+                
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <div class="chart-title">FBG反射光谱</div>
+                        <div class="chart-container">
+                            <canvas id="directSpectrumChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <div class="chart-title">直接检测信号输出</div>
+                        <div class="chart-container">
+                            <canvas id="directOutputChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="data-panel">
+                    <div class="data-card direct-data">
+                        <div class="data-title">FBG中心波长</div>
+                        <div class="data-value direct-value" id="directWavelengthValue">1550.00 nm</div>
+                    </div>
+                    
+                    <div class="data-card direct-data">
+                        <div class="data-title">直接检测光强</div>
+                        <div class="data-value direct-value" id="directIntensityValue">1.00 mW</div>
+                    </div>
+                    
+                    <div class="data-card direct-data">
+                        <div class="data-title">检测灵敏度</div>
+                        <div class="data-value direct-value"><span class="sensitivity-indicator low-sensitivity"></span>低</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="comparison-panel">
+                <div class="panel-title">边缘滤波解调（有解调器）</div>
+                
+                <div class="control-panel">
+                    <div class="control-group">
+                        <div class="control-title">温度控制 (°C)</div>
+                        <div class="slider-container">
+                            <div class="slider-value" id="demodTempValue">20.0 °C</div>
+                            <input type="range" id="demodTempSlider" class="demod-slider" min="-50" max="150" value="20" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-title">应变控制 (με)</div>
+                        <div class="slider-container">
+                            <div class="slider-value" id="demodStrainValue">0 με</div>
+                            <input type="range" id="demodStrainSlider" class="demod-slider" min="0" max="3000" value="0" step="10">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-reset" id="demodResetBtn">重置参数</button>
+                </div>
+                
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <div class="chart-title">FBG反射谱与边缘滤波器透射谱</div>
+                        <div class="chart-container">
+                            <canvas id="demodSpectrumChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <div class="chart-title">边缘滤波解调信号输出</div>
+                        <div class="chart-container">
+                            <canvas id="demodOutputChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="data-panel">
+                    <div class="data-card demod-data">
+                        <div class="data-title">FBG中心波长</div>
+                        <div class="data-value demod-value" id="demodWavelengthValue">1550.00 nm</div>
+                    </div>
+                    
+                    <div class="data-card demod-data">
+                        <div class="data-title">滤波后输出光强</div>
+                        <div class="data-value demod-value" id="demodIntensityValue">0.50 mW</div>
+                    </div>
+                    
+                    <div class="data-card demod-data">
+                        <div class="data-title">解调灵敏度</div>
+                        <div class="data-value demod-value"><span class="sensitivity-indicator high-sensitivity"></span>高</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>光纤光栅边缘滤波解调模拟系统 &copy; 2025 | 基于光纤传感原理与边缘滤波解调技术</p>
+            <p>本模拟器基于光纤布拉格光栅传感原理和边缘滤波解调方法开发，用于教学和演示目的。</p>
+        </footer>
     </div>
 
-    <div class="main">
-      <!-- 左侧：动态示意 -->
-      <div class="left">
-        <div class="card">
-          <div class="card-title">
-            动画示意
-            <span class="badge">点击下方“下一步”观看流程</span>
-          </div>
-          <div class="spectrum-canvas">
-            <!-- 坐标轴 -->
-            <div class="axis"></div>
-
-            <!-- FBG 峰 -->
-            <div id="peak" class="peak" style="left: 40%;">
-              <div id="peakLabel" class="peak-label">FBG 反射光谱</div>
-            </div>
-
-            <!-- 滤波器斜坡 -->
-            <div id="filterSlope" class="filter-slope"></div>
-
-            <!-- 光强柱 -->
-            <div id="intensityLabel" class="intensity-label" style="display:none;">滤波后光强 I</div>
-            <div id="intensityBar" class="intensity-bar" style="height: 18px; display:none;"></div>
-
-            <!-- 箭头说明（动态修改文本） -->
-            <div id="arrow1" class="arrow" style="bottom: 150px; left: 14px; opacity:0;">
-              <span>温度/应变变化 → 波长漂移 Δλ</span>
-            </div>
-            <div id="arrow2" class="arrow" style="bottom: 96px; right: 118px; opacity:0;">
-              <span>在斜坡上移动 → 透射率变化</span>
-            </div>
-            <div id="arrow3" class="arrow" style="bottom: 190px; right: 34px; opacity:0; flex-direction:column; text-align:right;">
-              <span>光强变化 ΔI</span>
-              <span>→ 电压变化 ΔV</span>
-            </div>
-
-            <div class="small-note" id="smallNote">
-              第 1 步：FBG 只改变“反射波长”，光谱整体左右移动。
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧：解释 + 公式 -->
-      <div class="right">
-        <!-- 步骤 1 -->
-        <div class="step active" data-step="1">
-          <div class="card right-card">
-            <div class="card-title">
-              Step 1 · FBG 反射光谱：只改变“位置”
-            </div>
-            <div class="card-body">
-              <p>外界温度 / 应变改变光纤的有效折射率 <em>n<sub>eff</sub></em> 和光栅周期 Λ，使 FBG 的中心反射波长发生漂移：</p>
-              <div class="eq">
-                λ<sub>B</sub> = 2 · n<sub>eff</sub> · Λ
-              </div>
-              <p style="margin-top:4px;">
-                传感量变化 → λ<sub>B</sub> 向左 / 向右平移，即出现波长漂移 Δλ。
-              </p>
-              <ul class="list">
-                <li>此时<strong>光谱形状几乎不变</strong>，只是整体平移。</li>
-                <li>FBG 完成了“把物理量编码到波长”的第一步。</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- 步骤 2 -->
-        <div class="step" data-step="2">
-          <div class="card right-card">
-            <div class="card-title">
-              Step 2 · 进入斜坡滤波器：波长 → 强度
-            </div>
-            <div class="card-body">
-              <p>将 FBG 反射光谱送入一个具有陡峭边缘的滤波器（长通 / 短通），在斜率区工作：</p>
-              <div class="eq">
-                I = I<sub>0</sub> · T(λ<sub>B</sub>)
-              </div>
-              <p style="margin-top:4px;">在斜坡的线性区，T(λ) 可以近似为一条直线，因此：</p>
-              <div class="eq">
-                ΔI ≈ (dT / dλ) · I<sub>0</sub> · Δλ
-              </div>
-              <ul class="list">
-                <li>FBG 波长轻微变化 → 滤波器透射率明显变化。</li>
-                <li><strong>把难测的“波长漂移”变成易测的“光强变化”。</strong></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- 步骤 3 -->
-        <div class="step" data-step="3">
-          <div class="card right-card">
-            <div class="card-title">
-              Step 3 · 光电探测：强度 → 电压
-            </div>
-            <div class="card-body">
-              <p>滤波后的光强 I 被光电探测器转换为电信号：</p>
-              <div class="eq">
-                V = R · I
-              </div>
-              <p style="margin-top:4px;">其中 R 为探测器响应度，因此：</p>
-              <div class="eq">
-                ΔV = R · ΔI
-              </div>
-              <p style="margin-top:4px;">
-                结合前一步的关系：<br />
-                <strong>ΔV ∝ Δλ</strong> —— 电压变化直接携带了波长变化的信息。
-              </p>
-              <ul class="list">
-                <li>光路部分到此结束，剩下是电子和算法。</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- 步骤 4 -->
-        <div class="step" data-step="4">
-          <div class="card right-card">
-            <div class="card-title">
-              Step 4 · 标定：电压 → 波长
-            </div>
-            <div class="card-body">
-              <p>通过实验标定“电压变化”和“波长漂移”的线性关系：</p>
-              <div class="eq">
-                Δλ = K · ΔV
-              </div>
-              <p style="margin-top:4px;">
-                这里 K 为标定得到的比例系数（拟合直线的斜率）。只要测得 ΔV，就能反推出 Δλ。
-              </p>
-              <ul class="list">
-                <li>将模拟量 V 转换为光学量 λ。</li>
-                <li>不同系统、不同滤波器对应不同的 K，需要单独标定。</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- 步骤 5 -->
-        <div class="step" data-step="5">
-          <div class="card right-card">
-            <div class="card-title">
-              Step 5 · 波长 → 温度 / 应变（最终解调）
-            </div>
-            <div class="card-body">
-              <p>FBG 对应变和温度的灵敏度已知：</p>
-              <div class="eq">
-                Δλ = k<sub>ε</sub> · Δε + k<sub>T</sub> · ΔT
-              </div>
-              <p style="margin-top:4px;">
-                如果只测一种量，例如仅测应变：
-              </p>
-              <div class="eq">
-                Δε = Δλ / k<sub>ε</sub>
-              </div>
-              <p style="margin-top:4px;">
-                或仅测温度：
-              </p>
-              <div class="eq">
-                ΔT = Δλ / k<sub>T</sub>
-              </div>
-              <ul class="list">
-                <li>至此：物理量 → 波长 → 强度 → 电压 → 波长 → 物理量，闭环完成。</li>
-                <li>边缘滤波法用简单硬件实现了<strong>高速、低成本的 FBG 解调</strong>。</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 底部控制条 -->
-    <div class="footer">
-      <div class="tagline">
-        小提示：反复切换步骤，观察左侧动画中“峰的位置”和“光强柱高度”的对应关系。
-      </div>
-      <div class="buttons">
-        <div class="progress-dots" id="dots"></div>
-        <button id="prevBtn" class="secondary" disabled>
-          ◀ 上一步
-        </button>
-        <button id="nextBtn">
-          下一步 ▶
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const totalSteps = 5;
-    let currentStep = 1;
-
-    const stepNumberEl = document.getElementById('stepNumber');
-    const stepTotalEl = document.getElementById('stepTotal');
-    const steps = document.querySelectorAll('.step');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const dotsContainer = document.getElementById('dots');
-
-    const peak = document.getElementById('peak');
-    const peakLabel = document.getElementById('peakLabel');
-    const filterSlope = document.getElementById('filterSlope');
-    const intensityBar = document.getElementById('intensityBar');
-    const intensityLabel = document.getElementById('intensityLabel');
-    const arrow1 = document.getElementById('arrow1');
-    const arrow2 = document.getElementById('arrow2');
-    const arrow3 = document.getElementById('arrow3');
-    const smallNote = document.getElementById('smallNote');
-
-    stepTotalEl.textContent = totalSteps.toString();
-
-    // 初始化进度点
-    for (let i = 1; i <= totalSteps; i++) {
-      const dot = document.createElement('div');
-      dot.className = 'dot' + (i === 1 ? ' active' : '');
-      dot.dataset.step = i.toString();
-      dotsContainer.appendChild(dot);
-    }
-
-    function setArrowVisibility(el, visible) {
-      el.style.transition = 'opacity 0.4s ease';
-      el.style.opacity = visible ? '1' : '0';
-    }
-
-    function updateVisuals(step) {
-      // 重置
-      filterSlope.classList.remove('visible');
-
-      // 默认光强条隐藏
-      intensityBar.style.display = 'none';
-      intensityLabel.style.display = 'none';
-
-      // 箭头默认隐藏
-      setArrowVisibility(arrow1, false);
-      setArrowVisibility(arrow2, false);
-      setArrowVisibility(arrow3, false);
-
-      // 步骤说明
-      if (step === 1) {
-        // 峰在中间，滤波器还没出现
-        peak.style.transform = 'translateX(0px)';
-        peakLabel.textContent = 'FBG 反射光谱';
-        smallNote.textContent = '第 1 步：FBG 只改变“反射波长”，光谱整体左右移动。';
-        setArrowVisibility(arrow1, true);
-      }
-
-      if (step === 2) {
-        // 显示滤波器，峰在斜坡区
-        filterSlope.classList.add('visible');
-        peak.style.transform = 'translateX(10px)';
-        peakLabel.textContent = 'λB 位于滤波器斜坡区';
-        smallNote.textContent = '第 2 步：在滤波器斜率区，小小的波长漂移会变成明显的透射率变化。';
-        setArrowVisibility(arrow1, true);
-        setArrowVisibility(arrow2, true);
-      }
-
-      if (step === 3) {
-        filterSlope.classList.add('visible');
-        // 模拟波长再漂移一点点 → 强度变化
-        peak.style.transform = 'translateX(26px)';
-        peakLabel.textContent = 'λB 轻微漂移 → 透射变化';
-        intensityBar.style.display = 'block';
-        intensityLabel.style.display = 'block';
-        intensityBar.style.height = '52px';
-        smallNote.textContent = '第 3 步：在斜坡上，λ 稍变 → 透过光强 I 明显变化。';
-        setArrowVisibility(arrow2, true);
-        setArrowVisibility(arrow3, true);
-      }
-
-      if (step === 4) {
-        filterSlope.classList.add('visible');
-        peak.style.transform = 'translateX(26px)';
-        peakLabel.textContent = '从 ΔI 映射为 ΔV';
-        intensityBar.style.display = 'block';
-        intensityLabel.style.display = 'block';
-        intensityBar.style.height = '52px';
-        smallNote.textContent = '第 4 步：光强变化 ΔI 被光电探测器转换为电压变化 ΔV。';
-        setArrowVisibility(arrow3, true);
-      }
-
-      if (step === 5) {
-        filterSlope.classList.add('visible');
-        peak.style.transform = 'translateX(26px)';
-        peakLabel.textContent = '最终得到温度 / 应变';
-        intensityBar.style.display = 'block';
-        intensityLabel.style.display = 'block';
-        intensityBar.style.height = '52px';
-        smallNote.textContent = '第 5 步：利用灵敏度常数，把 Δλ 变回物理量（温度 / 应变）。';
-        setArrowVisibility(arrow3, true);
-      }
-    }
-
-    function updateStep(step) {
-      currentStep = step;
-      stepNumberEl.textContent = step.toString();
-
-      steps.forEach(el => {
-        el.classList.toggle('active', parseInt(el.dataset.step) === step);
-      });
-
-      document.querySelectorAll('.dot').forEach(dot => {
-        dot.classList.toggle('active', parseInt(dot.dataset.step) === step);
-      });
-
-      prevBtn.disabled = step === 1;
-      nextBtn.disabled = step === totalSteps;
-
-      updateVisuals(step);
-    }
-
-    prevBtn.addEventListener('click', () => {
-      if (currentStep > 1) {
-        updateStep(currentStep - 1);
-      }
-    });
-
-    nextBtn.addEventListener('click', () => {
-      if (currentStep < totalSteps) {
-        updateStep(currentStep + 1);
-      }
-    });
-
-    // 点击圆点跳转
-    dotsContainer.addEventListener('click', (e) => {
-      const target = e.target;
-      if (target.classList.contains('dot')) {
-        const s = parseInt(target.dataset.step);
-        updateStep(s);
-      }
-    });
-
-    // 初始化画面
-    updateVisuals(1);
-  </script>
+    <script>
+        // 直接检测系统参数
+        let directTemp = 20.0;   // 直接检测系统温度 (°C)
+        let directStrain = 0;   // 直接检测系统应变 (με)
+        
+        // 边缘滤波解调系统参数
+        let demodTemp = 20.0;   // 边缘滤波解调系统温度 (°C)
+        let demodStrain = 0;    // 边缘滤波解调系统应变 (με)
+        
+        // 时间计数器
+        let timeCounter = 0;
+        
+        // 光纤光栅参数
+        const baseWavelength = 1550.0;  // 基础中心波长 (nm)
+        const tempSensitivity = 0.01;    // 温度灵敏度 (nm/°C)
+        const strainSensitivity = 0.0012; // 应变灵敏度 (nm/με)
+        const fbgBandwidth = 0.2;        // FBG带宽 (nm)
+        
+        // 边缘滤波器参数
+        const filterCenter = 1550.5;     // 滤波器中心波长 (nm)
+        const filterRange = 3.0;         // 滤波器线性范围 (nm)
+        
+        // 获取直接检测系统DOM元素
+        const directTempSlider = document.getElementById('directTempSlider');
+        const directStrainSlider = document.getElementById('directStrainSlider');
+        const directTempValue = document.getElementById('directTempValue');
+        const directStrainValue = document.getElementById('directStrainValue');
+        const directResetBtn = document.getElementById('directResetBtn');
+        
+        // 直接检测相关显示元素
+        const directWavelengthValue = document.getElementById('directWavelengthValue');
+        const directIntensityValue = document.getElementById('directIntensityValue');
+        
+        // 获取边缘滤波解调系统DOM元素
+        const demodTempSlider = document.getElementById('demodTempSlider');
+        const demodStrainSlider = document.getElementById('demodStrainSlider');
+        const demodTempValue = document.getElementById('demodTempValue');
+        const demodStrainValue = document.getElementById('demodStrainValue');
+        const demodResetBtn = document.getElementById('demodResetBtn');
+        
+        // 边缘滤波解调相关显示元素
+        const demodWavelengthValue = document.getElementById('demodWavelengthValue');
+        const demodIntensityValue = document.getElementById('demodIntensityValue');
+        
+        // 初始化直接检测图表
+        const directSpectrumCtx = document.getElementById('directSpectrumChart').getContext('2d');
+        const directOutputCtx = document.getElementById('directOutputChart').getContext('2d');
+        
+        // 初始化边缘滤波解调图表
+        const demodSpectrumCtx = document.getElementById('demodSpectrumChart').getContext('2d');
+        const demodOutputCtx = document.getElementById('demodOutputChart').getContext('2d');
+        
+        // 直接检测 - FBG反射光谱图表
+        const directSpectrumChart = new Chart(directSpectrumCtx, {
+            type: 'line',
+            data: {
+                labels: generateWavelengths(1545, 1555, 0.1),
+                datasets: [{
+                    label: 'FBG反射谱',
+                    data: [],
+                    borderColor: '#d32f2f',
+                    backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '波长 (nm)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: '反射率',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0,
+                        max: 1,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+        
+        // 直接检测 - 输出信号图表
+        const directOutputChart = new Chart(directOutputCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '直接检测信号',
+                    data: [],
+                    borderColor: '#d32f2f',
+                    backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '时间 (s)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: '输出光强 (mW)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0.9,
+                        max: 1.1,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // 边缘滤波解调 - 光谱图表
+        const demodSpectrumChart = new Chart(demodSpectrumCtx, {
+            type: 'line',
+            data: {
+                labels: generateWavelengths(1545, 1555, 0.1),
+                datasets: [
+                    {
+                        label: 'FBG反射谱',
+                        data: [],
+                        borderColor: '#388e3c',
+                        backgroundColor: 'rgba(56, 142, 60, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: '边缘滤波器透射谱',
+                        data: [],
+                        borderColor: '#3949ab',
+                        backgroundColor: 'rgba(57, 73, 171, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: true,
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '波长 (nm)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: '强度 (a.u.)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0,
+                        max: 1,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+        
+        // 边缘滤波解调 - 输出信号图表
+        const demodOutputChart = new Chart(demodOutputCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '边缘滤波解调信号',
+                    data: [],
+                    borderColor: '#388e3c',
+                    backgroundColor: 'rgba(56, 142, 60, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '时间 (s)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: '输出电压 (V)',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0,
+                        max: 5,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // 生成波长数组
+        function generateWavelengths(start, end, step) {
+            const wavelengths = [];
+            for (let w = start; w <= end; w += step) {
+                wavelengths.push(w.toFixed(1));
+            }
+            return wavelengths;
+        }
+        
+        // 计算FBG反射谱 (高斯分布)
+        function calculateFBGSpectrum(centerWavelength) {
+            const wavelengths = generateWavelengths(1545, 1555, 0.1);
+            return wavelengths.map(w => {
+                const x = (w - centerWavelength) / fbgBandwidth;
+                return Math.exp(-x*x);
+            });
+        }
+        
+        // 计算边缘滤波器透射谱
+        function calculateFilterSpectrum() {
+            const wavelengths = generateWavelengths(1545, 1555, 0.1);
+            return wavelengths.map(w => {
+                // 线性区域
+                if (Math.abs(w - filterCenter) < filterRange/2) {
+                    return 0.5 + (w - filterCenter) * 0.15;
+                }
+                // 非线性区域
+                else if (w < filterCenter) {
+                    return 0.1;
+                } else {
+                    return 0.9;
+                }
+            });
+        }
+        
+        // 计算直接检测光强 (模拟实际测量，包含微小波动)
+        function calculateDirectIntensity() {
+            // 直接检测对波长变化不敏感，主要为常数加上微小噪声
+            const baseIntensity = 1.0; // 基础光强
+            const noise = (Math.random() - 0.5) * 0.02; // 微小噪声
+            return baseIntensity + noise;
+        }
+        
+        // 计算通过滤波器后的光强 (边缘滤波解调)
+        function calculateDemodIntensity(centerWavelength) {
+            // 计算在滤波器线性区域的相对位置
+            const filterPosition = (centerWavelength - (filterCenter - filterRange/2)) / filterRange;
+            
+            // 限制在0.1-0.9范围内
+            let intensity = Math.max(0.1, Math.min(0.9, filterPosition));
+            
+            // 添加一些噪声模拟实际测量
+            const noise = (Math.random() - 0.5) * 0.02;
+            intensity += noise;
+            
+            return intensity;
+        }
+        
+        // 更新直接检测系统
+        function updateDirectSystem() {
+            timeCounter += 0.5;
+            
+            // 计算当前中心波长
+            const directWavelength = baseWavelength + 
+                                     directTemp * tempSensitivity + 
+                                     directStrain * strainSensitivity;
+            
+            // 更新直接检测部分
+            const directFBGSpectrum = calculateFBGSpectrum(directWavelength);
+            const directIntensity = calculateDirectIntensity();
+            
+            directSpectrumChart.data.datasets[0].data = directFBGSpectrum;
+            directSpectrumChart.update();
+            
+            // 更新直接检测输出图表
+            if (directOutputChart.data.labels.length > 20) {
+                directOutputChart.data.labels.shift();
+                directOutputChart.data.datasets[0].data.shift();
+            }
+            
+            directOutputChart.data.labels.push(timeCounter.toFixed(1));
+            directOutputChart.data.datasets[0].data.push(directIntensity);
+            directOutputChart.update();
+            
+            // 更新数据显示
+            directWavelengthValue.textContent = directWavelength.toFixed(2) + ' nm';
+            directIntensityValue.textContent = directIntensity.toFixed(3) + ' mW';
+            
+            // 更新滑块显示值
+            directTempValue.textContent = directTemp.toFixed(1) + ' °C';
+            directStrainValue.textContent = directStrain + ' με';
+        }
+        
+        // 更新边缘滤波解调系统
+        function updateDemodSystem() {
+            timeCounter += 0.5;
+            
+            // 计算当前中心波长
+            const demodWavelength = baseWavelength + 
+                                    demodTemp * tempSensitivity + 
+                                    demodStrain * strainSensitivity;
+            
+            // 更新边缘滤波解调部分
+            const demodFBGSpectrum = calculateFBGSpectrum(demodWavelength);
+            const filterSpectrum = calculateFilterSpectrum();
+            const demodIntensity = calculateDemodIntensity(demodWavelength);
+            
+            demodSpectrumChart.data.datasets[0].data = demodFBGSpectrum;
+            demodSpectrumChart.data.datasets[1].data = filterSpectrum;
+            demodSpectrumChart.update();
+            
+            // 更新边缘滤波解调输出图表
+            if (demodOutputChart.data.labels.length > 20) {
+                demodOutputChart.data.labels.shift();
+                demodOutputChart.data.datasets[0].data.shift();
+            }
+            
+            demodOutputChart.data.labels.push(timeCounter.toFixed(1));
+            demodOutputChart.data.datasets[0].data.push(demodIntensity * 5); // 转换为电压信号
+            demodOutputChart.update();
+            
+            // 更新数据显示
+            demodWavelengthValue.textContent = demodWavelength.toFixed(2) + ' nm';
+            demodIntensityValue.textContent = (demodIntensity * 1000).toFixed(2) + ' μW';
+            
+            // 更新滑块显示值
+            demodTempValue.textContent = demodTemp.toFixed(1) + ' °C';
+            demodStrainValue.textContent = demodStrain + ' με';
+        }
+        
+        // 直接检测系统事件监听
+        directTempSlider.addEventListener('input', function() {
+            directTemp = parseFloat(this.value);
+            updateDirectSystem();
+        });
+        
+        directStrainSlider.addEventListener('input', function() {
+            directStrain = parseInt(this.value);
+            updateDirectSystem();
+        });
+        
+        directResetBtn.addEventListener('click', function() {
+            directTemp = 20.0;
+            directStrain = 0;
+            
+            directTempSlider.value = directTemp;
+            directStrainSlider.value = directStrain;
+            
+            // 清空图表数据
+            directOutputChart.data.labels = [];
+            directOutputChart.data.datasets[0].data = [];
+            directOutputChart.update();
+            
+            updateDirectSystem();
+        });
+        
+        // 边缘滤波解调系统事件监听
+        demodTempSlider.addEventListener('input', function() {
+            demodTemp = parseFloat(this.value);
+            updateDemodSystem();
+        });
+        
+        demodStrainSlider.addEventListener('input', function() {
+            demodStrain = parseInt(this.value);
+            updateDemodSystem();
+        });
+        
+        demodResetBtn.addEventListener('click', function() {
+            demodTemp = 20.0;
+            demodStrain = 0;
+            
+            demodTempSlider.value = demodTemp;
+            demodStrainSlider.value = demodStrain;
+            
+            // 清空图表数据
+            demodOutputChart.data.labels = [];
+            demodOutputChart.data.datasets[0].data = [];
+            demodOutputChart.update();
+            
+            updateDemodSystem();
+        });
+        
+        // 初始更新
+        updateDirectSystem();
+        updateDemodSystem();
+        
+        // 定时更新，模拟实时数据
+        setInterval(() => {
+            updateDirectSystem();
+            updateDemodSystem();
+        }, 500);
+    </script>
 </body>
 </html>
